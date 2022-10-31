@@ -439,30 +439,107 @@ RESULT:
 Part 2: Inferences and Analysis
 
 1. Pick one city and category of your choice and group the businesses in that city or category by their overall star rating. Compare the businesses with 2-3 stars to the businesses with 4-5 stars and answer the following questions. Include your code.
-	
+	city: Las Vegas
+	category: Restuarants
+
 i. Do the two groups you chose to analyze have a different distribution of hours?
+Businesses in the chosen category and city have similar distributions for both the 2-3 star range and the 4-5 star range and vary only in the actual range of hours (the availability is similar).
 
 
 ii. Do the two groups you chose to analyze have a different number of reviews?
-         
+Yes, Restaurants in Las Vegas with 2-3 stars have 123 review while those with 4-5 stars have 939 reviews.
          
 iii. Are you able to infer anything from the location data provided between these two groups? Explain.
+Yes, neighborhoods with a higher average rating will have a higher count of group 2 businesses than group 1. 
 
 SQL code used for analysis:
+i. ******
+SELECT name, groupcat, hours,
+-- organize the days into separate numbers
+CASE 
+    WHEN hours LIKE 'Monday%' THEN 1
+    WHEN hours LIKE 'Tuesday%' THEN 2
+    WHEN hours LIKE 'Wednesday%' THEN 3
+    WHEN hours LIKE 'Thursday%' THEN 4
+    WHEN hours LIKE 'Friday%' THEN 5
+    WHEN hours LIKE 'Saturday%' THEN 6
+    WHEN hours LIKE 'Sunday%' THEN 7
+    ELSE 'none'
+    END AS distHours
+-- nest the filtered data that includes both the business data joined with the category for each respective business
+FROM (SELECT id, bus.name, neighborhood, city, stars, review_count, category,
+-- create a case for the necessary groups
+CASE 
+WHEN stars >= 2 AND stars <= 3 THEN '1'
+WHEN stars >= 4.0 AND stars <= 5 THEN '2'
+ELSE NULL
+END AS groupcat
+FROM business AS bus
+-- left join to obtain category data
+LEFT JOIN category AS cat 
+ON bus.id = cat.business_id
+-- filter results by the chosen city and category ensuring no data from outside the star ranges is included
+WHERE groupcat IS NOT NULL AND city = 'Las Vegas' AND category = 'Restaurants'
+ORDER BY stars ASC) AS nest1
+LEFT JOIN hours 
+ON nest1.id = hours.business_id
+ORDER BY groupcat, distHours
 
-		
+ii. *****
+SELECT city, category, SUM(review_count),
+-- create a case for the necessary groups
+CASE 
+WHEN stars >= 2 AND stars <= 3 THEN '1'
+WHEN stars >= 4.0 AND stars <= 5 THEN '2'
+ELSE NULL
+END AS groupcat
+FROM business AS bus
+-- left join to obtain category data
+LEFT JOIN category AS cat 
+ON bus.id = cat.business_id
+-- filter results by the chosen city and category ensuring no data from outside the star ranges is included
+WHERE groupcat IS NOT NULL AND city = 'Las Vegas' AND category = 'Restaurants'
+GROUP BY groupcat
+ORDER BY stars ASC
+
+iii. ************
+SELECT neighborhood, AVG(stars) AS starsAVG, city, count(id),
+-- create a case for the necessary groups
+CASE 
+WHEN stars >= 2 AND stars <= 3 THEN '1'
+WHEN stars >= 4.0 AND stars <= 5 THEN '2'
+ELSE NULL
+END AS groupcat
+FROM business AS bus
+-- left join to obtain category data
+LEFT JOIN category AS cat 
+ON bus.id = cat.business_id
+-- filter results by the chosen city and category ensuring no data from outside the star ranges is included
+WHERE groupcat IS NOT NULL AND city = 'Las Vegas'
+GROUP BY neighborhood, groupcat
+ORDER BY neighborhood ASC
 		
 2. Group business based on the ones that are open and the ones that are closed. What differences can you find between the ones that are still open and the ones that are closed? List at least two differences and the SQL code you used to arrive at your answer.
 		
-i. Difference 1:
+i. Difference 1: More businesses in the database are open than closed
          
          
-ii. Difference 2:
+ii. Difference 2: There are more reviews for open businesses than for closed ones. 
          
          
          
 SQL code used for analysis:
+SELECT is_open, SUM(review_count), AVG(stars), count(id)
+FROM business AS bus
+GROUP BY is_open
 
+RESULT:
++---------+-------------------+---------------+-----------+
+| is_open | SUM(review_count) |    AVG(stars) | count(id) |
++---------+-------------------+---------------+-----------+
+|       0 |             35261 | 3.52039473684 |      1520 |
+|       1 |            269300 | 3.67900943396 |      8480 |
++---------+-------------------+---------------+-----------+
 	
 	
 3. For this last part of your analysis, you are going to choose the type of analysis you want to conduct on the Yelp dataset and are going to prepare the data for analysis.
@@ -470,12 +547,46 @@ SQL code used for analysis:
 Ideas for analysis include: Parsing out keywords and business attributes for sentiment analysis, clustering businesses to find commonalities or anomalies between them, predicting the overall star rating for a business, predicting the number of fans a user will have, and so on. These are just a few examples to get you started, so feel free to be creative and come up with your own problem you want to solve. Provide answers, in-line, to all of the following:
 	
 i. Indicate the type of analysis you chose to do:
-         
-         
+National Supremacy - observing the scores, reviews, and existence of businesses in each country of the database 
+
 ii. Write 1-2 brief paragraphs on the type of data you will need for your analysis and why you chose that data:
-                           
-                  
+The idea of the analysis is to determine which country has the best businesses based on the data available. First the state location of each business wil be needed to determine which country they are in. From preliminary
+profiling, I have determined that the countries whose businesses are represented in the database are: Argentina, Germany, United Kingdom, USA, and Canada. Second, we will need their star scores for the businesses in each 
+country, by averaging the scores of all businesses per country, we may see how each country is rated overall. Finally, a certain emphasis should be placed on the amount of reviews that are present for each country. It 
+stands to reason that a country with more businesses and reviews will have a more accurate star review. Taking these parameters we can develop a full picture of the data per each country.
+
 iii. Output of your finished dataset:
          
-         
++----------------+---------------+-----------+
+| country        |      avgstars | accuScore |
++----------------+---------------+-----------+
+| United Kingdom | 3.77985074627 |        11 |
+| Germany        | 3.77122641509 |        11 |
+| USA            | 3.69085002707 |        34 |
+| Canada         |  3.5032879286 |        22 |
+| Argentina      | 3.33333333333 |         5 |
++----------------+---------------+-----------+
+
 iv. Provide the SQL code you used to create your final dataset:
+
+-- select the country, the average star rating and create an accuracy score (reviews/number of entries)
+SELECT country, avgstars, (totReviews/totCount) AS accuScore
+-- Create a nested select statement to allow us to use the grouped country data
+FROM (SELECT 
+-- Create a column that sorts all entries per each country
+CASE 
+WHEN state = 'ST' OR state = 'ELN' OR state = 'BW' OR state = 'NI' THEN 'Germany'
+WHEN state = 'ELN' OR state = 'MLN' OR state = 'EDH' OR state = 'FIF' 
+    OR state = 'HLD' OR state = 'NYK' OR state = 'ESX' OR state = 'WLN' THEN 'United Kingdom'
+WHEN state = 'QC' OR state = 'ON' THEN 'Canada'
+WHEN state = 'PA' OR state = 'NV' OR state = 'AZ' OR state = 'WI' OR state = 'OH' 
+    OR state = 'NC' OR state = 'SC' OR state = 'IL' OR state = 'NY' THEN 'USA'
+WHEN state = 'C' THEN 'Argentina'
+ELSE 'Other'
+END AS country,
+-- Call the relevant information
+AVG(stars) AS avgstars, count(id) AS totCount, SUM(review_count) AS totReviews
+FROM business
+-- group all entries based on their county
+GROUP BY country)
+ORDER BY avgstars DESC
